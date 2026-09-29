@@ -1,0 +1,13 @@
+# Runtime and generated evidence — regenerate with tools/*.mjs, never commit
+node_modules/
+dist/
+.preview-work/
+.flow-work/
+
+# Machine-local path overrides (see `localPath()` in tools/preview.mjs)
+tools/local-paths.json
+
+# Editor / OS noise
+*.log
+.DS_Store
+Thumbs.db

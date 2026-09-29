@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>dsh-reasoning-slider · 流动粒子闪烁候选</title>
+<style>
+/* ── page chrome (不属于被测对象) ─────────────────────────────── */
+*{box-sizing:border-box}
+html,body{margin:0;padding:12px 14px;background:#f4f4f5;color:#18181b;font:12px/1.4 "Segoe UI",-apple-system,system-ui,sans-serif}
+h1{font-size:13px;margin:0 0 8px;font-weight:700}
+h2{font-size:11px;margin:0 0 6px;color:#52525b;font-weight:600}
+.theme{background:#fff;border:1px solid #e4e4e7;border-radius:10px;padding:8px 10px;margin-bottom:10px}
+.theme.theme-dark{background:#232326;border-color:#3f3f46;color:#e4e4e7}
+.theme.theme-dark h2{color:#a1a1aa}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.cand h3{font-size:11px;margin:0 0 1px;font-weight:700}
+.cand .note{font-size:10px;color:#71717a;margin:0 0 6px;min-height:30px}
+.theme-dark .cand .note{color:#a1a1aa}
+.row{margin-bottom:8px}
+.row .label{font-size:9px;color:#a1a1aa;margin-bottom:1px;font-variant-numeric:tabular-nums}
+.wrap{position:relative;width:142px;height:14px;line-height:0}
+.track{position:absolute;left:0;top:2px;width:142px;height:10px;border-radius:999px;overflow:hidden;background:var(--rest)}
+.fill{height:100%;background:var(--fill)}
+.thumb{position:absolute;top:0;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 1px 3px rgba(0,0,0,.32)}
+.theme-light{--fill:#298ffe;--rest:#e5e2e6}
+.theme-dark{--fill:#3a83f7;--rest:#404040}
+
+/* ── 被测几何：与 lib/client.js 逐字一致（TRACK_HEIGHT=10） ───────── */
+.drs-flow{position:absolute;left:0;top:50%;height:10px;transform:translateY(-50%);border-radius:999px 0 0 999px;overflow:hidden;pointer-events:none;-webkit-mask-image:linear-gradient(90deg,rgba(0,0,0,0) 0,rgba(0,0,0,.4) 30%,#000 100%);mask-image:linear-gradient(90deg,rgba(0,0,0,0) 0,rgba(0,0,0,.4) 30%,#000 100%)}
+.drs-flow-a,.drs-flow-b{position:absolute;left:0;top:0;height:100%;background-repeat:repeat-x;background-position:0 50%}
+
+/* ── P0 对照：出货现状（纯平移，无 opacity 动画） ─────────────── */
+.p0 .drs-flow-a{width:calc(100% + 16px);background-image:radial-gradient(circle at 4px 50%,rgba(255,255,255,.55) 0 1px,rgba(255,255,255,0) 1.15px);background-size:16px 100%;animation:p0-flow-a 1.6s linear infinite}
+.p0 .drs-flow-b{width:calc(100% + 27px);background-image:radial-gradient(circle at 13px 30%,rgba(255,255,255,.3) 0 .85px,rgba(255,255,255,0) 1px);background-size:27px 100%;animation:p0-flow-b 2.9s linear infinite}
+@keyframes p0-flow-a{from{transform:translateX(0)}to{transform:translateX(-16px)}}
+@keyframes p0-flow-b{from{transform:translateX(0)}to{transform:translateX(-27px)}}
+
+/* ── P1 整层相位呼吸：两层各挂一条 opacity keyframe ──────────── */
+.p1 .drs-flow-a{width:calc(100% + 16px);background-image:radial-gradient(circle at 4px 50%,rgba(255,255,255,.55) 0 1px,rgba(255,255,255,0) 1.15px);background-size:16px 100%;animation:p0-flow-a 1.6s linear infinite,p1-twinkle-a 2.4s ease-in-out -.7s infinite}
+.p1 .drs-flow-b{width:calc(100% + 27px);background-image:radial-gradient(circle at 13px 30%,rgba(255,255,255,.3) 0 .85px,rgba(255,255,255,0) 1px);background-size:27px 100%;animation:p0-flow-b 2.9s linear infinite,p1-twinkle-b 3.7s ease-in-out -2.3s infinite}
+@keyframes p1-twinkle-a{0%,100%{opacity:.45}45%{opacity:1}}
+@keyframes p1-twinkle-b{0%,100%{opacity:.5}55%{opacity:1}}
+
+/* ── P2 反相梳对（保净点距）：每层加一条"半周期错位、周期翻倍"的副梳（::before），
+      与主梳等速漂移、反相明灭。
+      载波周期翻倍 + 副梳偏移半个周期 ⇒ 合成净点距与现网完全一致
+      （A 层 16px：4+32k 与 20+32k；B 层 27px：13+54k 与 40+54k），
+      漂移时长同比放大以保持线速度（A 16px/1.6s ⇒ 32px/3.2s；B 27px/2.9s ⇒ 54px/5.8s）。
+      峰值不高于现网：主梳 alpha 仍是 .55，只有暗相下探。 ─────────── */
+.p2 .drs-flow-a{width:calc(100% + 32px);background-image:radial-gradient(circle at 4px 50%,rgba(255,255,255,.55) 0 1px,rgba(255,255,255,0) 1.15px);background-size:32px 100%;animation:p2-flow-a 3.2s linear infinite,p2-twinkle 2.15s ease-in-out 0s infinite}
+.p2 .drs-flow-b{width:calc(100% + 54px);background-image:radial-gradient(circle at 13px 30%,rgba(255,255,255,.3) 0 .85px,rgba(255,255,255,0) 1px);background-size:54px 100%;animation:p2-flow-b 5.8s linear infinite,p2-twinkle 3.45s ease-in-out -1.1s infinite}
+/* 副梳挂在容器上，不能挂在被动画的层里：opacity 会以「组透明度」乘到子元素上，
+      父层 .5 与副梳 1.0 相乘 == 父层 1.0 与副梳 .5 相乘，反相会被精确抵消。 */
+.p2 .drs-flow::before,.p2 .drs-flow::after{content:'';position:absolute;top:0;height:100%;pointer-events:none;background-repeat:repeat-x;background-position:0 50%}
+.p2 .drs-flow::before{left:16px;width:calc(100% + 32px);background-image:radial-gradient(circle at 4px 50%,rgba(255,255,255,.42) 0 .9px,rgba(255,255,255,0) 1.05px);background-size:32px 100%;animation:p2-flow-a 3.2s linear infinite,p2-twinkle-alt 2.15s ease-in-out 0s infinite}
+.p2 .drs-flow::after{left:27px;width:calc(100% + 54px);background-image:radial-gradient(circle at 13px 30%,rgba(255,255,255,.24) 0 .8px,rgba(255,255,255,0) .95px);background-size:54px 100%;animation:p2-flow-b 5.8s linear infinite,p2-twinkle-alt 3.45s ease-in-out -1.1s infinite}
+@keyframes p2-flow-a{from{transform:translateX(0)}to{transform:translateX(-32px)}}
+@keyframes p2-flow-b{from{transform:translateX(0)}to{transform:translateX(-54px)}}
+@keyframes p2-twinkle{0%,100%{opacity:.5}38%,52%{opacity:1}}
+@keyframes p2-twinkle-alt{0%,100%{opacity:1}38%,52%{opacity:.5}}
+
+/* ── P3 步进超胞：4 格超胞（每格 alpha 不同）+ steps(4) 位移，
+      粒子每跳一格就继承下一格的 alpha → 逐粒子相位天然错开 ────── */
+.p3 .drs-flow-a{width:calc(100% + 64px);background-image:radial-gradient(circle at 4px 50%,rgba(255,255,255,.55) 0 1px,rgba(255,255,255,0) 1.15px),radial-gradient(circle at 20px 50%,rgba(255,255,255,.24) 0 1px,rgba(255,255,255,0) 1.15px),radial-gradient(circle at 36px 50%,rgba(255,255,255,.62) 0 1px,rgba(255,255,255,0) 1.15px),radial-gradient(circle at 52px 50%,rgba(255,255,255,.34) 0 1px,rgba(255,255,255,0) 1.15px);background-size:64px 100%;animation:p3-flow-a 3.2s steps(4,jump-end) infinite}
+.p3 .drs-flow-b{width:calc(100% + 27px);background-image:radial-gradient(circle at 13px 30%,rgba(255,255,255,.3) 0 .85px,rgba(255,255,255,0) 1px);background-size:27px 100%;animation:p0-flow-b 2.9s linear infinite}
+@keyframes p3-flow-a{from{transform:translateX(0)}to{transform:translateX(-64px)}}
+</style>
+</head>
+<body>
+<h1>dsh-reasoning-slider · 填充上的流动粒子：闪烁候选（真尺寸 142×10 轨道 / 14px 白钮）</h1>
+<main id="root"></main>
+<script>
+(function () {
+  'use strict'
+  var TRACK_WIDTH = 142, TRACK_HEIGHT = 10, THUMB = 14
+  var THEMES = [
+    { id: 'light', cls: 'theme-light', label: 'light · 填充 #298ffe / 空轨 #e5e2e6' },
+    { id: 'dark', cls: 'theme-dark', label: 'dark · 填充 #3a83f7 / 空轨 #404040' }
+  ]
+  var CANDS = [
+    { id: 'p0', cls: 'p0', title: 'P0 现状（对照）', note: '两层点阵纯平移，没有任何 opacity 动画' },
+    { id: 'p1', cls: 'p1', title: 'P1 整层相位呼吸', note: '两层各加一条 opacity keyframe；同层粒子全同相 → 读成「整条在呼吸」' },
+    { id: 'p2', cls: 'p2', title: 'P2 反相梳对（拟定）', note: '每层加一条半周期错位副梳 ::before（周期翻倍⇒净点距不变），与主梳等速漂移、反相明灭' },
+    { id: 'p3', cls: 'p3', title: 'P3 步进超胞', note: '4 格超胞 + steps(4)：逐粒子相位天然错开，但流动变成跳格' }
+  ]
+  var WIDTHS = [
+    { w: 128, label: 'ratio 1.00 · 128px' },
+    { w: 96, label: 'ratio 0.75 · 96px' },
+    { w: 64, label: 'ratio 0.50 · 64px' }
+  ]
+
+  function el(tag, cls) {
+    var node = document.createElement(tag)
+    if (cls) node.className = cls
+    return node
+  }
+
+  var root = document.getElementById('root')
+  THEMES.forEach(function (theme) {
+    var section = el('section', 'theme ' + theme.cls)
+    section.dataset.theme = theme.id
+    var title = el('h2')
+    title.textContent = theme.label
+    section.appendChild(title)
+    var grid = el('div', 'grid')
+    CANDS.forEach(function (cand) {
+      var col = el('div', 'cand ' + cand.cls)
+      var head = el('h3')
+      head.textContent = cand.title
+      var note = el('p', 'note')
+      note.textContent = cand.note
+      col.appendChild(head)
+      col.appendChild(note)
+      WIDTHS.forEach(function (width) {
+        var row = el('div', 'row')
+        var label = el('div', 'label')
+        label.textContent = width.label
+        var wrap = el('div', 'wrap')
+        var track = el('div', 'track')
+        var fill = el('div', 'fill')
+        fill.style.width = width.w + 'px'
+        track.appendChild(fill)
+        var flow = el('div', 'drs-flow')
+        flow.style.width = width.w + 'px'
+        flow.dataset.strip = theme.id + '|' + cand.id + '|' + width.w
+        flow.appendChild(el('span', 'drs-flow-a'))
+        flow.appendChild(el('span', 'drs-flow-b'))
+        var thumb = el('div', 'thumb')
+        thumb.style.left = width.w + 'px'
+        wrap.appendChild(track)
+        wrap.appendChild(flow)
+        wrap.appendChild(thumb)
+        row.appendChild(label)
+        row.appendChild(wrap)
+        col.appendChild(row)
+      })
+      grid.appendChild(col)
+    })
+    section.appendChild(grid)
+    root.appendChild(section)
+  })
+
+  /* ── 观测量 ───────────────────────────────────────────────── */
+
+  function animInventory() {
+    return document.getAnimations().map(function (a) {
+      var timing = a.effect && a.effect.getTiming ? a.effect.getTiming() : {}
+      var target = a.effect && a.effect.target ? a.effect.target : null
+      return {
+        name: a.animationName || null,
+        target: target ? (typeof target.className === 'string' && target.className ? target.className : target.tagName) : null,
+        pseudo: (a.effect && a.effect.pseudoElement) || null,
+        playState: a.playState,
+        currentTime: Number(a.currentTime),
+        duration: timing.duration,
+        delay: timing.delay,
+        iterations: timing.iterations
+      }
+    })
+  }
+
+  function rectFacts() {
+    var out = []
+    var strips = document.querySelectorAll('[data-strip]')
+    for (var i = 0; i < strips.length; i += 1) {
+      var node = strips[i]
+      var r = node.getBoundingClientRect()
+      var flowA = node.querySelector('.drs-flow-a')
+      var flowB = node.querySelector('.drs-flow-b')
+      out.push({
+        id: node.dataset.strip,
+        x: r.x, y: r.y, w: r.width, h: r.height,
+        aAnim: flowA ? getComputedStyle(flowA).animationName + ' | ' + getComputedStyle(flowA).animationDuration + ' | ' + getComputedStyle(flowA).animationDelay : null,
+        bAnim: flowB ? getComputedStyle(flowB).animationName + ' | ' + getComputedStyle(flowB).animationDuration + ' | ' + getComputedStyle(flowB).animationDelay : null,
+        aBeforeAnim: flowA ? getComputedStyle(flowA, '::before').animationName + ' | ' + getComputedStyle(flowA, '::before').animationDuration + ' | ' + getComputedStyle(flowA, '::before').animationDelay : null,
+        bBeforeAnim: flowB ? getComputedStyle(flowB, '::before').animationName + ' | ' + getComputedStyle(flowB, '::before').animationDuration + ' | ' + getComputedStyle(flowB, '::before').animationDelay : null,
+        // The *animated values* at the sampled instant: the pixel measurement is only
+        // trustworthy if these move the way the CSS says they should.
+        opacity: {
+          a: flowA ? getComputedStyle(flowA).opacity : null,
+          b: flowB ? getComputedStyle(flowB).opacity : null,
+          aBefore: flowA ? getComputedStyle(flowA, '::before').opacity : null,
+          bBefore: flowB ? getComputedStyle(flowB, '::before').opacity : null
+        },
+        transform: {
+          a: flowA ? getComputedStyle(flowA).transform : null,
+          b: flowB ? getComputedStyle(flowB).transform : null
+        }
+      })
+    }
+    return out
+  }
+
+  function cssFacts() {
+    var out = []
+    var sheets = document.styleSheets
+    for (var s = 0; s < sheets.length; s += 1) {
+      var rules
+      try { rules = sheets[s].cssRules } catch (e) { continue }
+      for (var i = 0; i < rules.length; i += 1) {
+        var rule = rules[i]
+        var text = rule.cssText || ''
+        if (text.indexOf('drs-flow') === -1) continue
+        out.push(text.slice(0, 400))
+      }
+    }
+    return out
+  }
+
+  function b64(text) {
+    var bytes = new TextEncoder().encode(text)
+    var chunks = ''
+    var step = 0x8000
+    for (var i = 0; i < bytes.length; i += step) {
+      chunks += String.fromCharCode.apply(null, bytes.subarray(i, i + step))
+    }
+    return btoa(chunks)
+  }
+
+  function sink(payload) {
+    var pre = document.createElement('pre')
+    pre.id = 'facts'
+    pre.style.display = 'none'
+    pre.textContent = b64(JSON.stringify(payload))
+    document.body.appendChild(pre)
+  }
+
+  var params = new URLSearchParams(location.search)
+  var seek = params.get('seek')
+  var live = params.get('live') === '1'
+
+  // Preview-only switch: `?only=a|b` hides the other lane's structure entirely, so the
+  // driver can A/B a single lane at a time. The paired-frame test needs the *whole*
+  // pattern to repeat between the two compared frames, and the two lanes drift at
+  // different speeds (1.6s vs 2.9s per period), so they can only be tested one at a time.
+  // Nothing here is part of the shipped CSS.
+  var only = params.get('only')
+  if (only === 'a' || only === 'b') {
+    var other = only === 'a' ? 'b' : 'a'
+    var hide = document.createElement('style')
+    hide.textContent = '.drs-flow-' + other + ',.drs-flow-' + other + '::before{display:none}'
+    document.head.appendChild(hide)
+  }
+
+  function baseFacts(extra) {
+    return Object.assign({
+      mode: seek !== null ? 'seek' : (live ? 'live' : 'static'),
+      dpr: window.devicePixelRatio,
+      viewport: { w: window.innerWidth, h: window.innerHeight },
+      scrollHeight: document.documentElement.scrollHeight,
+      ua: navigator.userAgent,
+      themes: THEMES.map(function (t) { return t.id }),
+      candidates: CANDS.map(function (c) { return c.id }),
+      widths: WIDTHS.map(function (w) { return w.w }),
+      only: only,
+      rects: rectFacts(),
+      css: cssFacts()
+    }, extra || {})
+  }
+
+  if (seek !== null) {
+    var t = Number(seek)
+    var all = document.getAnimations()
+    all.forEach(function (a) { a.pause(); a.currentTime = t })
+    // force a style/layout flush so the seeked state is what gets painted
+    void document.documentElement.offsetHeight
+    sink(baseFacts({ seekedTo: t, animations: animInventory() }))
+  } else if (live) {
+    var first = animInventory()
+    var t0 = performance.now()
+    setTimeout(function () {
+      var second = animInventory()
+      sink(baseFacts({
+        live: {
+          t0: t0,
+          t1: performance.now(),
+          first: first,
+          second: second
+        }
+      }))
+    }, 900)
+  } else {
+    sink(baseFacts({ animations: animInventory() }))
+  }
+})()
+</script>
+</body>
+</html>

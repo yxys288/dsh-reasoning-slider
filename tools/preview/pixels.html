@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>pixel audit</title>
+<style>
+  html, body { margin: 0; background: #101014; color: #e8e8ee; font: 13px ui-monospace, Consolas, monospace; }
+  #report { padding: 16px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div id="report">measuring…</div>
+<script>
+/**
+ * Measure the colour a screenshot actually contains.
+ *
+ * This is the evidence that the level bar stopped being a hue ramp: it decodes
+ * a captured PNG onto a canvas and reports how much of it is *vivid* colour, and
+ * across how many distinct hues. A monochrome control leaves that count at zero.
+ *
+ * The image URL arrives as `?src=`; the result is written to `#report` and
+ * mirrored into a base64 `<pre id="pixels">` so `chrome --dump-dom` can read it.
+ */
+(function () {
+  'use strict'
+
+  var params = new URLSearchParams(location.search)
+  var src = params.get('src')
+  var regionsParam = params.get('regions')
+  var report = document.getElementById('report')
+
+  /**
+   * Bucket a pixel by hue and saturation.
+   * @param data - RGBA bytes.
+   * @param width - image width in device px.
+   * @param height - image height in device px.
+   * @param regions - `[x, y, width, height]` boxes to restrict to; empty = whole image.
+   */
+  function analyse(data, width, height, regions) {
+    var buckets = new Array(12).fill(0)
+    var vivid = 0
+    var opaque = 0
+    var maxSaturation = 0
+    var sumSaturation = 0
+    var total = 0
+    var boxes = regions.length === 0 ? [[0, 0, width, height]] : regions
+
+    for (var b = 0; b < boxes.length; b += 1) {
+      var x0 = Math.max(0, Math.floor(boxes[b][0]))
+      var y0 = Math.max(0, Math.floor(boxes[b][1]))
+      var x1 = Math.min(width, Math.ceil(boxes[b][0] + boxes[b][2]))
+      var y1 = Math.min(height, Math.ceil(boxes[b][1] + boxes[b][3]))
+      for (var y = y0; y < y1; y += 1) {
+        for (var x = x0; x < x1; x += 1) analysePixel((y * width + x) * 4)
+      }
+    }
+
+    function analysePixel(i) {
+      if (data[i + 3] < 8) return
+      opaque += 1
+      total += 1
+      var r = data[i] / 255
+      var g = data[i + 1] / 255
+      var bl = data[i + 2] / 255
+      var max = Math.max(r, g, bl)
+      var min = Math.min(r, g, bl)
+      var delta = max - min
+      var light = (max + min) / 2
+      var saturation = delta === 0 ? 0 : delta / (1 - Math.abs(2 * light - 1))
+      sumSaturation += saturation
+      if (saturation > maxSaturation) maxSaturation = saturation
+      // "Vivid" = clearly tinted and mid-toned: the band a rainbow gradient
+      // lives in and that a neutral control never enters.
+      if (saturation < 0.35 || light < 0.12 || light > 0.92) return
+      vivid += 1
+      var hue
+      if (delta === 0) hue = 0
+      else if (max === r) hue = 60 * (((g - bl) / delta) % 6)
+      else if (max === g) hue = 60 * ((bl - r) / delta + 2)
+      else hue = 60 * ((r - g) / delta + 4)
+      if (hue < 0) hue += 360
+      buckets[Math.min(11, Math.floor(hue / 30))] += 1
+    }
+
+    return {
+      width: width,
+      height: height,
+      regions: boxes.length === 0 ? 0 : boxes.length,
+      scoped: regions.length > 0,
+      opaquePixels: opaque,
+      vividPixels: vivid,
+      vividShare: opaque === 0 ? 0 : Number((vivid / opaque).toFixed(6)),
+      meanSaturation: opaque === 0 ? 0 : Number((sumSaturation / total).toFixed(4)),
+      maxSaturation: Number(maxSaturation.toFixed(4)),
+      hueBuckets: buckets,
+      occupiedHueBuckets: buckets.filter(function (count) { return count > 0 }).length,
+    }
+  }
+
+  function finish(result) {
+    report.textContent = JSON.stringify(result, null, 2)
+    var sink = document.createElement('pre')
+    sink.id = 'pixels'
+    sink.hidden = true
+    sink.textContent = btoa(unescape(encodeURIComponent(JSON.stringify(result))))
+    document.body.appendChild(sink)
+  }
+
+  var image = new Image()
+  image.onload = function () {
+    try {
+      var canvas = document.createElement('canvas')
+      canvas.width = image.naturalWidth
+      canvas.height = image.naturalHeight
+      var context = canvas.getContext('2d')
+      context.drawImage(image, 0, 0)
+      var data = context.getImageData(0, 0, canvas.width, canvas.height).data
+      var regions = []
+      if (regionsParam !== null) {
+        try {
+          var parsed = JSON.parse(regionsParam)
+          if (Array.isArray(parsed)) regions = parsed
+        } catch (error) { /* fall back to the whole image */ }
+      }
+      finish(analyse(data, canvas.width, canvas.height, regions))
+    } catch (error) {
+      finish({ error: String(error && error.message ? error.message : error) })
+    }
+  }
+  image.onerror = function () { finish({ error: 'image failed to load: ' + src }) }
+  image.src = src
+})()
+</script>
+</body>
+</html>

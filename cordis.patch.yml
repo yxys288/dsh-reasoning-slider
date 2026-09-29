@@ -1,0 +1,12 @@
+# dsh-reasoning-slider — 本包自带的 profile 层（官方 bundle 机制）。
+#
+# 注册路径：包名加入 profile 的 `dsh.profile.bundles`，dsh 便会在启动时把本文件
+# 作为一层 patch 合并进插件树，从而插入 Host 半边这一行。插件树里有了这一行，
+# 客户端模块系统（dsh-client-modules）才会扫描到本包的 `dsh.client` 声明，
+# 并把 `exports["./client"]` 的浏览器 bundle 经 /plugins 路由送到页面。
+#
+# ⚠️ 不要同时在 profile 的 cordis.patch.yml 里手工再 insert 一次同 id 的条目，
+#    否则插件树会出现两个同名 entry。
+- insert:
+    - id: reasoning-slider
+      name: dsh-reasoning-slider

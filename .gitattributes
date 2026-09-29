@@ -1,0 +1,8 @@
+# Normalize line endings — this package ships to Node and to browsers alike.
+* text=auto eol=lf
+
+# Evidence artifacts are binary.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
