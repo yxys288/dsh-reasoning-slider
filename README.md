@@ -25,6 +25,17 @@ DSH Web GUI 插件：把输入框里的**模型推理强度**换成 **Codex 桌�
 面板 264px 定宽（= 236px 档位条 + 两侧 14px 内边距）、圆角 16px、与触发器间距 10px，**朝上弹出，上方空间不足时朝下翻转**。
 鼠标在档位条上移动时，**指针所在的那一档会浮出名字**（见「悬停读数」）。
 
+实际渲染 —— 真 bundle + 真 React + 真 DSH 主题 token，由 `node tools/preview.mjs` 以合成 fixture 渲染
+（**不是**真实会话截图；本节图片是它输出到 `dist/ui-preview/reasoning-slider/` 的原图裁剪件）：
+
+| 亮色 · 面板打开 | 暗色 · 面板打开 |
+|---|---|
+| ![面板 · 亮色](docs/images/panel-light.png) | ![面板 · 暗色](docs/images/panel-dark.png) |
+
+收起态：一级只显示「模型名 + 当前档位名」，档位名跟着选择走（下图为同一模型的三档）——
+
+![收起态 · 亮色](docs/images/states-light.png)
+
 > 改造前的像素级调研（Codex 官方控件怎么做的、哪些细节**不该**照搬）在
 > [`tools/codex-effort-picker-spec.md`](tools/codex-effort-picker-spec.md)；本文只写落地结果与实测值。
 
